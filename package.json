@@ -1,0 +1,6 @@
+{
+  "name": "lb-ia-gerador",
+  "version": "1.0.0",
+  "description": "Intermediário seguro LB para geração de anúncios com IA",
+  "private": true
+}
