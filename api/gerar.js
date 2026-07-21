@@ -22,16 +22,19 @@ export default async function handler(req, res) {
 
     // Regras de título específicas por marketplace
     const regraTitulo = marketplace === 'shopee'
-      ? `REGRAS DO TÍTULO (Shopee):
-- Máximo 100 caracteres.
-- Comece com o tipo de produto seguido de características do PRODUTO EM SI: material, modelo, estilo e uso/ocasião.
-- PROIBIDO no título: cores (ex: amarelo, rosa, lilás, azul) e tamanhos (ex: P, M, G, GG). NUNCA inclua cor nem tamanho no título.
-- Foque 100% em informação do produto (o que ele é, do que é feito, para que serve).
-- Sem emojis, sem CAIXA ALTA exagerada, sem símbolos. Rico em palavras-chave, mas natural.`
-      : `REGRAS DO TÍTULO (Mercado Livre):
-- Máximo 60 caracteres. Respeite bem esse limite.
-- Comece com o termo principal que o cliente busca, seguido das características mais relevantes.
-- Sem emojis, sem CAIXA ALTA exagerada, sem símbolos. Rico em palavras-chave, mas natural.`;
+      ? `REGRAS DO TÍTULO (Shopee) - siga TODAS com rigor:
+1. CAPITALIZAÇÃO: use Iniciais Maiúsculas em Cada Palavra Importante (substantivos, adjetivos). Ex: "Vestido Feminino Longo Estampado Manga Bufante". Nunca escreva o título todo em minúsculas.
+2. ESTRATÉGIA DE SEO (o mais importante): NÃO copie a descrição do vendedor. Você é um especialista - PENSE em como o cliente busca na Shopee e ENRIQUEÇA o título com palavras-chave de busca reais que o vendedor não escreveu. Ex: se ele diz "vestido de passaros", você pensa em termos como "Vestido Midi Floral Boho Chic Moda Feminina Verão" conforme o que realmente aparece. Adicione sinônimos e termos que ampliam o alcance (ex: "Roupa Feminina", "Moda", "Elegante", "Casual", conforme o produto).
+3. Aproveite ao máximo os 100 caracteres - um título curto demais desperdiça espaço de busca. Busque usar entre 70 e 100 caracteres.
+4. Comece pelo tipo de produto + característica principal, depois vá agregando palavras-chave estratégicas.
+5. PROIBIDO: cores (amarelo, rosa, lilás, azul...) e tamanhos (P, M, G, GG). NUNCA inclua cor nem tamanho.
+6. Sem emojis, sem CAIXA ALTA total, sem símbolos.`
+      : `REGRAS DO TÍTULO (Mercado Livre) - siga TODAS com rigor:
+1. CAPITALIZAÇÃO: use Iniciais Maiúsculas nas Palavras Importantes. Nunca tudo minúsculo.
+2. ESTRATÉGIA: não copie a descrição do vendedor. Pense como o cliente busca no Mercado Livre e use as palavras-chave mais fortes e diretas. O ML valoriza títulos objetivos e bem ranqueados.
+3. Máximo 60 caracteres - respeite bem esse limite, priorizando os termos de maior busca.
+4. Comece pelo termo principal que o cliente busca, seguido das características mais relevantes.
+5. Sem emojis, sem CAIXA ALTA total, sem símbolos.`;
 
     // Regras de descrição específicas por marketplace
     const regraDescricao = marketplace === 'ml'
@@ -45,7 +48,7 @@ export default async function handler(req, res) {
 - Comece com uma frase de impacto sobre o benefício principal, depois desenvolva características, usos e diferenciais.
 - Linguagem simples e profissional, em português do Brasil.`;
 
-    const systemPrompt = `Você é um especialista sênior em criação de anúncios de alta conversão para marketplaces brasileiros, com foco em ${nomeMk}. Você domina o algoritmo de busca de cada plataforma e sabe escrever títulos e descrições que rankeiam bem e vendem.
+    const systemPrompt = `Você é um ESTRATEGISTA sênior de SEO e copywriting para marketplaces brasileiros, especialista em ${nomeMk}. Seu trabalho NÃO é repetir o que o vendedor escreveu - é TRANSFORMAR a informação do produto em um anúncio otimizado, rico em palavras-chave de busca reais, que rankeia no topo e vende. Você conhece profundamente como o cliente pesquisa em cada plataforma e sempre agrega termos estratégicos que o vendedor não pensou. Copiar a descrição do vendedor é um ERRO GRAVE - você sempre eleva e enriquece.
 
 Se uma imagem do produto for enviada, analise-a com atenção: identifique modelo, tipo de peça, detalhes visíveis (estampa, tecido aparente, acabamento) e use essas informações reais para deixar o anúncio mais fiel e preciso.
 
