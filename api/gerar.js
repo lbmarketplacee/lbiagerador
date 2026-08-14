@@ -18,7 +18,7 @@ const REGRAS_TITULO = {
 4. Comece pelo termo principal que o cliente busca, seguido das características mais relevantes.
 5. Sem emojis, sem CAIXA ALTA total, sem símbolos.`,
   tiktok: `REGRAS DO TÍTULO (TikTok Shop) - siga TODAS com rigor:
-1. TAMANHO OBRIGATÓRIO: o título deve ter ENTRE 100 E 140 CARACTERES. Isso não é opcional - conte os caracteres e ajuste até cair nessa faixa. Um título curto demais é um ERRO nessa plataforma.
+1. TAMANHO OBRIGATÓRIO: o título deve ter ENTRE 120 E 140 CARACTERES (mire perto de 130-135 pra ter folga). Isso não é opcional - conte os caracteres e ajuste até cair nessa faixa. Um título curto demais é um ERRO GRAVE nessa plataforma.
 2. CAPITALIZAÇÃO: use Iniciais Maiúsculas em Cada Palavra Importante (substantivos, adjetivos, marca, modelo).
 3. ESTRATÉGIA DE SEO: NÃO copie a descrição do vendedor. O TikTok Shop favorece títulos ricos em informação e palavras-chave de busca - inclua tipo de produto, material, uso, público-alvo, características técnicas e sinônimos de busca relevantes, tudo emendado de forma natural (não é uma lista de palavras soltas, é uma frase corrida rica em informação).
 4. Comece pelo tipo de produto + característica principal, e vá agregando detalhes técnicos e palavras-chave até preencher bem a faixa de 100-140 caracteres.
@@ -118,6 +118,43 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato:
     let parsed;
     try { parsed = JSON.parse(conteudo); } catch { return res.status(500).json({ erro: 'Resposta inválida da IA.' }); }
 
+    // A IA nem sempre acerta o tamanho do título só por instrução (ela não "conta caracteres" de verdade).
+    // Então conferimos de verdade em código, e se estiver fora da faixa certa, pedimos pra ela corrigir.
+    const FAIXA_TITULO = { shopee: [70, 100], ml: [1, 60], tiktok: [120, 140] };
+    const [minTitulo, maxTitulo] = FAIXA_TITULO[mk] || [1, 999];
+    let titulo = parsed.titulo || '';
+
+    // Tenta corrigir o tamanho até 3 vezes, sempre conferindo de verdade em código (a IA não conta caracteres sozinha com precisão)
+    for (let tentativa = 0; tentativa < 3 && (titulo.length < minTitulo || titulo.length > maxTitulo); tentativa++) {
+      const faltam = minTitulo - titulo.length;
+      const pedidoCorrecao = titulo.length < minTitulo
+        ? `O título abaixo tem exatamente ${titulo.length} caracteres, mas PRECISA ter no mínimo ${minTitulo} e no máximo ${maxTitulo} caracteres — ou seja, faltam pelo menos ${faltam} caracteres. Reescreva-o mais longo, adicionando MAIS palavras-chave relevantes de busca (características técnicas, material, uso, público-alvo, sinônimos), mantendo a mesma capitalização e estilo. Conte os caracteres do que você escrever antes de responder. Título atual: "${titulo}". Responda SOMENTE com um JSON no formato {"titulo":"..."}`
+        : `O título abaixo tem ${titulo.length} caracteres, mas PRECISA ter no máximo ${maxTitulo} caracteres. Reescreva-o mais curto, removendo o que for menos relevante, mantendo as palavras-chave mais importantes. Título atual: "${titulo}". Responda SOMENTE com um JSON no formato {"titulo":"..."}`;
+
+      try {
+        const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + chave },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Você é um especialista em títulos de anúncios para ${nomeMk}. Responda somente com JSON válido.` },
+              { role: 'user', content: pedidoCorrecao }
+            ],
+            temperature: 0.6,
+            response_format: { type: 'json_object' }
+          })
+        });
+        if (r2.ok) {
+          const data2 = await r2.json();
+          const conteudo2 = data2.choices?.[0]?.message?.content || '{}';
+          const parsed2 = JSON.parse(conteudo2);
+          if (parsed2.titulo) titulo = parsed2.titulo;
+        } else { break; }
+      } catch (e) { break; }
+    }
+
+    parsed.titulo = titulo;
     return res.status(200).json({ ok: true, ...parsed, marketplace: mk });
   } catch (e) {
     return res.status(500).json({ erro: 'Erro interno: ' + (e.message || 'desconhecido') });
