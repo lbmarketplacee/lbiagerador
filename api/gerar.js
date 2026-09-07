@@ -2,7 +2,7 @@
 // Usa a API do Google Gemini. A chave fica na variável de ambiente GEMINI_API_KEY (na Vercel, nunca no código)
 
 const NOMES_MK = { shopee: 'Shopee', ml: 'Mercado Livre', tiktok: 'TikTok Shop' };
-const MODELO_TEXTO = 'gemini-2.5-flash';
+const MODELO_TEXTO = 'gemini-3.6-flash';
 
 const REGRAS_TITULO = {
   shopee: `REGRAS DO TÍTULO (Shopee) - siga TODAS com rigor:
