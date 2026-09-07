@@ -1,7 +1,8 @@
 // Intermediário seguro LB — geração de anúncios com IA (texto + leitura de foto)
-// A chave fica na variável de ambiente OPENAI_API_KEY (configurada na Vercel, nunca no código)
+// Usa a API do Google Gemini. A chave fica na variável de ambiente GEMINI_API_KEY (na Vercel, nunca no código)
 
 const NOMES_MK = { shopee: 'Shopee', ml: 'Mercado Livre', tiktok: 'TikTok Shop' };
+const MODELO_TEXTO = 'gemini-2.5-flash';
 
 const REGRAS_TITULO = {
   shopee: `REGRAS DO TÍTULO (Shopee) - siga TODAS com rigor:
@@ -42,6 +43,12 @@ const REGRAS_DESCRICAO = {
 - Linguagem simples, direta e profissional, em português do Brasil.`
 };
 
+function parseDataUrl(dataUrl) {
+  const match = /^data:(.+?);base64,(.+)$/.exec(dataUrl || '');
+  if (!match) return null;
+  return { mimeType: match[1], data: match[2] };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -49,8 +56,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
 
-  const chave = process.env.OPENAI_API_KEY;
-  if (!chave) return res.status(500).json({ erro: 'Chave da OpenAI não configurada na Vercel.' });
+  const chave = process.env.GEMINI_API_KEY;
+  if (!chave) return res.status(500).json({ erro: 'Chave do Gemini não configurada na Vercel.' });
 
   try {
     const { produto, marketplace, imagem } = req.body || {};
@@ -79,52 +86,37 @@ REGRAS DOS BULLET POINTS:
 Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato:
 {"titulo":"...","bullets":["✓ ...","✓ ...","✓ ...","✓ ...","✓ ..."],"descricao":"..."}`;
 
-    // Monta o conteúdo do usuário (texto + imagem se houver)
     const textoUsuario = produto && produto.trim()
       ? `Crie o anúncio para ${nomeMk} deste produto:\n\n${produto}`
       : `Crie o anúncio para ${nomeMk} do produto mostrado na imagem.`;
 
-    let userContent;
-    if (imagem) {
-      userContent = [
-        { type: 'text', text: textoUsuario },
-        { type: 'image_url', image_url: { url: imagem } }
-      ];
-    } else {
-      userContent = textoUsuario;
-    }
+    const imagemParsed = imagem ? parseDataUrl(imagem) : null;
+    const parts = [{ text: systemPrompt + '\n\n' + textoUsuario }];
+    if (imagemParsed) parts.push({ inline_data: { mime_type: imagemParsed.mimeType, data: imagemParsed.data } });
 
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_TEXTO}:generateContent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + chave },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent }
-        ],
-        temperature: 0.7,
-        response_format: { type: 'json_object' }
+        contents: [{ role: 'user', parts }],
+        generationConfig: { temperature: 0.7, responseMimeType: 'application/json' }
       })
     });
 
     if (!r.ok) {
       const err = await r.text();
-      return res.status(500).json({ erro: 'Erro na OpenAI: ' + err.slice(0, 200) });
+      return res.status(500).json({ erro: 'Erro no Gemini: ' + err.slice(0, 200) });
     }
 
     const data = await r.json();
-    const conteudo = data.choices?.[0]?.message?.content || '{}';
+    const conteudo = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     let parsed;
     try { parsed = JSON.parse(conteudo); } catch { return res.status(500).json({ erro: 'Resposta inválida da IA.' }); }
 
-    // A IA nem sempre acerta o tamanho do título só por instrução (ela não "conta caracteres" de verdade).
-    // Então conferimos de verdade em código, e se estiver fora da faixa certa, pedimos pra ela corrigir.
     const FAIXA_TITULO = { shopee: [70, 100], ml: [1, 60], tiktok: [120, 140] };
     const [minTitulo, maxTitulo] = FAIXA_TITULO[mk] || [1, 999];
     let titulo = parsed.titulo || '';
 
-    // Tenta corrigir o tamanho até 3 vezes, sempre conferindo de verdade em código (a IA não conta caracteres sozinha com precisão)
     for (let tentativa = 0; tentativa < 3 && (titulo.length < minTitulo || titulo.length > maxTitulo); tentativa++) {
       const faltam = minTitulo - titulo.length;
       const pedidoCorrecao = titulo.length < minTitulo
@@ -132,22 +124,17 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato:
         : `O título abaixo tem ${titulo.length} caracteres, mas PRECISA ter no máximo ${maxTitulo} caracteres. Reescreva-o mais curto, removendo o que for menos relevante, mantendo as palavras-chave mais importantes. Título atual: "${titulo}". Responda SOMENTE com um JSON no formato {"titulo":"..."}`;
 
       try {
-        const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
+        const r2 = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_TEXTO}:generateContent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + chave },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: `Você é um especialista em títulos de anúncios para ${nomeMk}. Responda somente com JSON válido.` },
-              { role: 'user', content: pedidoCorrecao }
-            ],
-            temperature: 0.6,
-            response_format: { type: 'json_object' }
+            contents: [{ role: 'user', parts: [{ text: `Você é um especialista em títulos de anúncios para ${nomeMk}. Responda somente com JSON válido.\n\n${pedidoCorrecao}` }] }],
+            generationConfig: { temperature: 0.6, responseMimeType: 'application/json' }
           })
         });
         if (r2.ok) {
           const data2 = await r2.json();
-          const conteudo2 = data2.choices?.[0]?.message?.content || '{}';
+          const conteudo2 = data2.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
           const parsed2 = JSON.parse(conteudo2);
           if (parsed2.titulo) titulo = parsed2.titulo;
         } else { break; }
